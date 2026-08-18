@@ -1,0 +1,6 @@
+{
+  "name": "NetPulse Test",
+  "description": "Test your download speed, upload speed, ping and connection performance with NetPulse Test.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
