@@ -19,6 +19,7 @@ import { SpeedGauge } from '../components/SpeedGauge';
 import { LiveTelemetryChart, MiniSparkline } from '../components/LiveTelemetryChart';
 import { ResultCard } from '../components/ResultCard';
 import { AdSlot } from '../components/AdSlot';
+import { SpeedTestProgressBar } from '../components/SpeedTestProgressBar';
 import { SpeedMetrics, QualityAssessment, ServerNode, ClientInfo, TestSettings } from '../types';
 
 interface HomePageProps {
@@ -49,12 +50,49 @@ export const HomePage: React.FC<HomePageProps> = ({
   const isCompleted = metrics.phase === 'completed';
   const isTesting = metrics.phase !== 'idle' && metrics.phase !== 'completed' && metrics.phase !== 'error';
 
+  // Dynamic color palette based on active phase
+  const getPhaseGradient = () => {
+    switch (metrics.phase) {
+      case 'latency':
+        return 'from-purple-500 via-indigo-500 to-cyan-400';
+      case 'download':
+        return 'from-cyan-500 via-teal-400 to-blue-500';
+      case 'upload':
+        return 'from-blue-500 via-indigo-500 to-purple-400';
+      case 'finishing':
+      case 'completed':
+        return 'from-emerald-400 via-cyan-400 to-blue-500';
+      default:
+        return 'from-cyan-500 to-blue-500';
+    }
+  };
+
   return (
-    <div className="w-full flex flex-col items-center px-4 sm:px-6 lg:px-8 py-6">
+    <div className="w-full flex flex-col items-center px-4 sm:px-6 lg:px-8 py-6 relative">
+      {/* 0. SUBTLE GLOBAL TOP PROGRESS BAR (Fixed at the very top of viewport during test phases) */}
+      {(isTesting || (isCompleted && metrics.progress === 100)) && (
+        <div className="fixed top-0 left-0 right-0 z-50 h-[3px] bg-slate-950/40 pointer-events-none">
+          <div 
+            className={`h-full bg-gradient-to-r ${getPhaseGradient()} transition-all duration-300 ease-out shadow-[0_0_12px_rgba(34,211,238,0.8)] relative`}
+            style={{ width: `${Math.min(Math.max(metrics.progress, 0), 100)}%` }}
+          >
+            {/* Shimmer light effect */}
+            <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/40 to-transparent animate-[shimmer_1.5s_infinite]" />
+            {/* Trailing glow beacon */}
+            {isTesting && (
+              <div className="absolute right-0 top-1/2 -translate-y-1/2 w-2 h-2 bg-white rounded-full shadow-[0_0_8px_#ffffff]" />
+            )}
+          </div>
+        </div>
+      )}
+
       {/* 1. TOP ADVERTISEMENT AREA */}
-      <div className="w-full max-w-7xl mb-6">
+      <div className="w-full max-w-7xl mb-4">
         <AdSlot position="top" />
       </div>
+
+      {/* 2. DYNAMIC SPEED TEST PHASE PROGRESS BAR (Ping, Download, Upload) */}
+      <SpeedTestProgressBar metrics={metrics} unit={settings.unit} />
 
       <div className="w-full max-w-7xl flex flex-col lg:flex-row gap-6 items-stretch">
         {/* Main Speed Testing Core Section (Left Column) */}

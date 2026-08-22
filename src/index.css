@@ -59,3 +59,12 @@
 .gauge-svg-glow {
   filter: drop-shadow(0 0 8px rgba(6, 182, 212, 0.5));
 }
+
+@keyframes shimmer {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(200%);
+  }
+}

@@ -1,5 +1,6 @@
 import React from 'react';
 import { Play, RotateCcw, Square, Activity, ArrowDown, ArrowUp, Zap } from 'lucide-react';
+import { motion } from 'motion/react';
 import { SpeedMetrics, TestPhase } from '../types';
 
 interface SpeedGaugeProps {
@@ -85,6 +86,9 @@ export const SpeedGauge: React.FC<SpeedGaugeProps> = ({
   const arcLength = circumference * (240 / 360);
   const strokeDashoffset = arcLength - normalizedValue * arcLength;
 
+  // Needle angle: sweeps 240 degrees from start (0 deg in SVG space = 7 o'clock in screen space)
+  const needleAngle = normalizedValue * 240;
+
   const isTesting = phase !== 'idle' && phase !== 'completed' && phase !== 'error';
 
   return (
@@ -111,8 +115,22 @@ export const SpeedGauge: React.FC<SpeedGaugeProps> = ({
               <stop offset="100%" stopColor="#3b82f6" />
             </linearGradient>
 
+            <linearGradient id="needleGradient" x1="0%" y1="0%" x2="100%" y2="0%">
+              <stop offset="0%" stopColor="#334155" stopOpacity="0.2" />
+              <stop offset="50%" stopColor={accentColor} stopOpacity="0.7" />
+              <stop offset="100%" stopColor="#ffffff" stopOpacity="1" />
+            </linearGradient>
+
             <filter id="glowEffect" x="-20%" y="-20%" width="140%" height="140%">
               <feGaussianBlur stdDeviation="5" result="blur" />
+              <feMerge>
+                <feMergeNode in="blur" />
+                <feMergeNode in="SourceGraphic" />
+              </feMerge>
+            </filter>
+
+            <filter id="needleGlow" x="-30%" y="-30%" width="160%" height="160%">
+              <feGaussianBlur stdDeviation="3" result="blur" />
               <feMerge>
                 <feMergeNode in="blur" />
                 <feMergeNode in="SourceGraphic" />
@@ -168,6 +186,85 @@ export const SpeedGauge: React.FC<SpeedGaugeProps> = ({
             filter="url(#glowEffect)"
             className="transition-all duration-150 ease-out"
           />
+
+          {/* Dynamic Speedometer Needle using Framer Motion */}
+          <motion.g
+            initial={{ rotate: 0 }}
+            animate={{ rotate: needleAngle }}
+            transition={{
+              type: 'spring',
+              stiffness: 120,
+              damping: 16,
+              mass: 0.5,
+              restDelta: 0.001,
+            }}
+            style={{ transformOrigin: '160px 160px' }}
+          >
+            {/* Needle Drop Shadow */}
+            <line
+              x1="160"
+              y1="160"
+              x2={160 + (radius - 18)}
+              y2="160"
+              stroke="#000000"
+              strokeWidth="4"
+              strokeOpacity="0.35"
+              strokeLinecap="round"
+              transform="translate(2, 2)"
+            />
+
+            {/* Subtle Counterweight Extension behind pivot */}
+            <line
+              x1="160"
+              y1="160"
+              x2="136"
+              y2="160"
+              stroke="#334155"
+              strokeWidth="3"
+              strokeLinecap="round"
+              strokeOpacity="0.7"
+            />
+
+            {/* Needle Main Glowing Beam */}
+            <line
+              x1="160"
+              y1="160"
+              x2={160 + (radius - 16)}
+              y2="160"
+              stroke="url(#needleGradient)"
+              strokeWidth="2.5"
+              strokeLinecap="round"
+              filter="url(#needleGlow)"
+            />
+
+            {/* Needle High-Precision Tip Pointer Dot */}
+            <circle
+              cx={160 + (radius - 16)}
+              cy="160"
+              r="3"
+              fill="#ffffff"
+              stroke={accentColor}
+              strokeWidth="1.5"
+              filter="url(#needleGlow)"
+            />
+
+            {/* Center Pivot Hub Cap */}
+            <circle
+              cx="160"
+              cy="160"
+              r="8"
+              fill="#0f172a"
+              stroke="#334155"
+              strokeWidth="2"
+            />
+            <circle
+              cx="160"
+              cy="160"
+              r="3.5"
+              fill={accentColor}
+              filter="url(#needleGlow)"
+            />
+          </motion.g>
         </svg>
 
         {/* Center Digital Display & Primary Interaction Trigger */}
