@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Activity, Settings2, History, Menu, X, Sun, Moon, Zap, Shield } from 'lucide-react';
+import { Activity, Settings2, History, Menu, X, Sun, Moon, Zap, Shield, Sparkles, Bot } from 'lucide-react';
 import { PageRoute, ServerNode } from '../types';
 
 interface NavbarProps {
@@ -7,6 +7,7 @@ interface NavbarProps {
   onNavigate: (route: PageRoute) => void;
   onOpenHistory: () => void;
   onOpenSettings: () => void;
+  onOpenAIChat: () => void;
   server: ServerNode | null;
   theme: 'dark' | 'light';
   onToggleTheme: () => void;
@@ -17,6 +18,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   onNavigate,
   onOpenHistory,
   onOpenSettings,
+  onOpenAIChat,
   server,
   theme,
   onToggleTheme,
@@ -77,6 +79,18 @@ export const Navbar: React.FC<NavbarProps> = ({
               {server ? server.name.split('(')[0] : 'Auto Edge Node'}
             </span>
           </div>
+
+          {/* AI Question Solve & Support Button */}
+          <button
+            id="nav-ai-chat-button"
+            onClick={onOpenAIChat}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold text-cyan-300 bg-gradient-to-r from-cyan-950/80 to-blue-950/80 hover:from-cyan-900 hover:to-blue-900 border border-cyan-500/30 hover:border-cyan-400 shadow-sm transition-all group"
+            title="Ask NetPulse AI Specialist"
+            aria-label="Ask AI Specialist"
+          >
+            <Sparkles className="w-3.5 h-3.5 text-cyan-400 group-hover:scale-110 transition-transform animate-pulse" />
+            <span>AI Support</span>
+          </button>
 
           {/* History Button */}
           <button
@@ -151,15 +165,26 @@ export const Navbar: React.FC<NavbarProps> = ({
             </button>
           ))}
 
-          <div className="pt-2 border-t border-slate-800/80 flex items-center justify-between">
+          <div className="pt-2 border-t border-slate-800/80 grid grid-cols-3 gap-2 items-center">
+            <button
+              onClick={() => {
+                onOpenAIChat();
+                setMobileMenuOpen(false);
+              }}
+              className="flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold text-cyan-300 bg-cyan-950/80 border border-cyan-500/40"
+            >
+              <Sparkles className="w-3.5 h-3.5 text-cyan-400" />
+              <span>AI Chat</span>
+            </button>
+
             <button
               onClick={() => {
                 onOpenHistory();
                 setMobileMenuOpen(false);
               }}
-              className="flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-semibold text-slate-300 bg-slate-900 border border-slate-800"
+              className="flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold text-slate-300 bg-slate-900 border border-slate-800"
             >
-              <History className="w-4 h-4 text-cyan-400" />
+              <History className="w-3.5 h-3.5 text-slate-400" />
               <span>History</span>
             </button>
 
@@ -168,17 +193,10 @@ export const Navbar: React.FC<NavbarProps> = ({
                 onOpenSettings();
                 setMobileMenuOpen(false);
               }}
-              className="flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-semibold text-slate-300 bg-slate-900 border border-slate-800"
+              className="flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold text-slate-300 bg-slate-900 border border-slate-800"
             >
-              <Settings2 className="w-4 h-4 text-cyan-400" />
+              <Settings2 className="w-3.5 h-3.5 text-slate-400" />
               <span>Settings</span>
-            </button>
-
-            <button
-              onClick={onToggleTheme}
-              className="p-2 rounded-xl text-slate-400 bg-slate-900 border border-slate-800"
-            >
-              {theme === 'dark' ? <Sun className="w-4 h-4 text-amber-400" /> : <Moon className="w-4 h-4" />}
             </button>
           </div>
         </div>

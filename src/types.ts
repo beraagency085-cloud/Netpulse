@@ -90,6 +90,15 @@ export interface TestSettings {
   selectedServerId: string;
 }
 
+export interface AIChatMessage {
+  id: string;
+  role: 'user' | 'model' | 'assistant';
+  text: string;
+  timestamp: number;
+  sources?: string[];
+  suggestedFollowUps?: string[];
+}
+
 export type PageRoute = 
   | 'home'
   | 'about'

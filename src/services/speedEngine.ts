@@ -235,7 +235,7 @@ export class SpeedTestEngine {
       const roundedMbps = Number(currentMbps.toFixed(2));
 
       telemetry.push(roundedMbps);
-      if (telemetry.length > 40) telemetry.shift();
+      if (telemetry.length > 100) telemetry.shift();
 
       const peak = Math.max(this.metrics.download.peak, roundedMbps);
       const progressFraction = Math.min(elapsedSec / durationSec, 1);
@@ -323,7 +323,7 @@ export class SpeedTestEngine {
       const roundedMbps = Number(currentMbps.toFixed(2));
 
       telemetry.push(roundedMbps);
-      if (telemetry.length > 40) telemetry.shift();
+      if (telemetry.length > 100) telemetry.shift();
 
       const peak = Math.max(this.metrics.upload.peak, roundedMbps);
       const progressFraction = Math.min(elapsedSec / durationSec, 1);

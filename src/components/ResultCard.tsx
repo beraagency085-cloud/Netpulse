@@ -16,9 +16,12 @@ import {
   Video, 
   CloudUpload,
   Info,
-  Globe
+  Globe,
+  Sparkles
 } from 'lucide-react';
 import { SpeedMetrics, QualityAssessment, ServerNode, ClientInfo } from '../types';
+import { BandwidthCapabilitiesPanel } from './BandwidthCapabilitiesPanel';
+import { LiveTelemetryChart, MiniSparkline } from './LiveTelemetryChart';
 
 interface ResultCardProps {
   metrics: SpeedMetrics;
@@ -28,6 +31,7 @@ interface ResultCardProps {
   unit: string;
   onTestAgain: () => void;
   onOpenShareModal: () => void;
+  onAskAI?: (prompt?: string) => void;
 }
 
 export const ResultCard: React.FC<ResultCardProps> = ({
@@ -38,6 +42,7 @@ export const ResultCard: React.FC<ResultCardProps> = ({
   unit,
   onTestAgain,
   onOpenShareModal,
+  onAskAI,
 }) => {
   const [copied, setCopied] = useState(false);
   const [showTechnicalDetails, setShowTechnicalDetails] = useState(false);
@@ -95,7 +100,19 @@ Test your internet speed at NetPulse Test`;
             </div>
           </div>
 
-          <div className="flex items-center gap-2 w-full sm:w-auto">
+          <div className="flex items-center gap-2 w-full sm:w-auto flex-wrap">
+            {onAskAI && (
+              <button
+                id="ask-ai-diagnose-results-btn"
+                onClick={() => onAskAI(`Please analyze my speed test results: Download ${metrics.download.avg} ${unit}, Upload ${metrics.upload.avg} ${unit}, Ping ${metrics.ping.avg}ms, Jitter ${metrics.ping.jitter}ms, Overall Grade ${assessment.grade}. What does this mean and how can I optimize it?`)}
+                className="flex-1 sm:flex-none inline-flex items-center justify-center gap-1.5 px-3.5 py-2.5 rounded-xl text-xs font-bold bg-gradient-to-r from-cyan-950 to-blue-950 hover:from-cyan-900 hover:to-blue-900 text-cyan-300 border border-cyan-500/40 hover:border-cyan-400 transition-all cursor-pointer shadow-sm group"
+                title="Ask AI Specialist to analyze these results"
+              >
+                <Sparkles className="w-3.5 h-3.5 text-cyan-400 group-hover:scale-110 transition-transform animate-pulse" />
+                <span>Ask AI to Diagnose</span>
+              </button>
+            )}
+
             <button
               id="copy-results-quick-button"
               onClick={copySummaryText}
@@ -138,6 +155,14 @@ Test your internet speed at NetPulse Test`;
                 {unit}
               </span>
             </div>
+            <div className="mt-1 mb-2">
+              <MiniSparkline
+                data={metrics.download.telemetry}
+                color="#22d3ee"
+                gradientId="resultDownSpark"
+                height={30}
+              />
+            </div>
             <div className="text-[11px] text-slate-500">
               Transferred: {formatBytes(metrics.download.bytesTransferred)}
             </div>
@@ -161,6 +186,14 @@ Test your internet speed at NetPulse Test`;
               <span className="ml-1 text-xs sm:text-sm font-medium text-slate-400">
                 {unit}
               </span>
+            </div>
+            <div className="mt-1 mb-2">
+              <MiniSparkline
+                data={metrics.upload.telemetry}
+                color="#3b82f6"
+                gradientId="resultUpSpark"
+                height={30}
+              />
             </div>
             <div className="text-[11px] text-slate-500">
               Transferred: {formatBytes(metrics.upload.bytesTransferred)}
@@ -186,6 +219,14 @@ Test your internet speed at NetPulse Test`;
                 ms
               </span>
             </div>
+            <div className="mt-1 mb-2">
+              <MiniSparkline
+                data={metrics.ping.samples}
+                color="#c084fc"
+                gradientId="resultPingSpark"
+                height={30}
+              />
+            </div>
             <div className="text-[11px] text-slate-500">
               Max: {metrics.ping.max} ms
             </div>
@@ -210,11 +251,26 @@ Test your internet speed at NetPulse Test`;
                 ms
               </span>
             </div>
+            <div className="mt-1 mb-2">
+              <MiniSparkline
+                data={metrics.ping.samples.map((s, idx, arr) => idx === 0 ? 0 : Math.abs(s - arr[idx - 1]))}
+                color="#60a5fa"
+                gradientId="resultJitterSpark"
+                height={30}
+              />
+            </div>
             <div className="text-[11px] text-slate-500">
               Stability: {metrics.ping.jitter <= 5 ? 'Rock Solid' : metrics.ping.jitter <= 15 ? 'Normal' : 'Variable'}
             </div>
           </div>
         </div>
+
+        {/* Real-time Sparkline Throughput Stream & Jitter Consistency */}
+        {(metrics.download.telemetry.length > 0 || metrics.upload.telemetry.length > 0) && (
+          <div className="p-6 border-t border-slate-800/80 bg-slate-950/30">
+            <LiveTelemetryChart metrics={metrics} unit={unit} />
+          </div>
+        )}
 
         {/* Real-World Use-Case Suitability Badges */}
         <div className="p-6 border-t border-slate-800/80 bg-slate-950/20">
@@ -373,6 +429,15 @@ Test your internet speed at NetPulse Test`;
             </p>
           </div>
         )}
+      </div>
+
+      {/* Real-World Bandwidth Capabilities & Usability Panel */}
+      <div className="mt-6">
+        <BandwidthCapabilitiesPanel
+          metrics={metrics}
+          assessment={assessment}
+          unit={unit as any}
+        />
       </div>
     </div>
   );

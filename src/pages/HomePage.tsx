@@ -16,7 +16,7 @@ import {
   Cpu
 } from 'lucide-react';
 import { SpeedGauge } from '../components/SpeedGauge';
-import { LiveTelemetryChart } from '../components/LiveTelemetryChart';
+import { LiveTelemetryChart, MiniSparkline } from '../components/LiveTelemetryChart';
 import { ResultCard } from '../components/ResultCard';
 import { AdSlot } from '../components/AdSlot';
 import { SpeedMetrics, QualityAssessment, ServerNode, ClientInfo, TestSettings } from '../types';
@@ -31,6 +31,7 @@ interface HomePageProps {
   onStopTest: () => void;
   onOpenShareModal: () => void;
   onOpenSettings: () => void;
+  onAskAI?: (prompt?: string) => void;
 }
 
 export const HomePage: React.FC<HomePageProps> = ({
@@ -43,6 +44,7 @@ export const HomePage: React.FC<HomePageProps> = ({
   onStopTest,
   onOpenShareModal,
   onOpenSettings,
+  onAskAI,
 }) => {
   const isCompleted = metrics.phase === 'completed';
   const isTesting = metrics.phase !== 'idle' && metrics.phase !== 'completed' && metrics.phase !== 'error';
@@ -93,37 +95,77 @@ export const HomePage: React.FC<HomePageProps> = ({
             )}
 
             {/* 4 Core Metrics Row in Bottom of Card */}
-            <div className="w-full grid grid-cols-2 sm:grid-cols-4 gap-4 mt-6">
-              <div className={`bg-slate-800/40 p-4 rounded-2xl border border-slate-700/50 text-center transition-all ${metrics.phase === 'download' ? 'border-cyan-500/60 ring-1 ring-cyan-500/30' : ''}`}>
-                <span className="text-[10px] text-slate-400 uppercase font-bold block mb-1">Download</span>
-                <span className="text-2xl font-bold text-white font-mono-num">
-                  {metrics.download.avg > 0 ? metrics.download.avg.toFixed(1) : metrics.download.current > 0 ? metrics.download.current.toFixed(1) : '0.0'}
-                </span>
-                <span className="text-xs text-slate-500 ml-1">{settings.unit}</span>
+            <div className="w-full grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4 mt-6">
+              <div className={`bg-slate-800/40 p-3 sm:p-4 rounded-2xl border border-slate-700/50 flex flex-col justify-between text-center transition-all ${metrics.phase === 'download' ? 'border-cyan-500/60 ring-1 ring-cyan-500/30' : ''}`}>
+                <div>
+                  <span className="text-[10px] text-slate-400 uppercase font-bold block mb-1">Download</span>
+                  <span className="text-xl sm:text-2xl font-bold text-white font-mono-num">
+                    {metrics.download.avg > 0 ? metrics.download.avg.toFixed(1) : metrics.download.current > 0 ? metrics.download.current.toFixed(1) : '0.0'}
+                  </span>
+                  <span className="text-xs text-slate-500 ml-1">{settings.unit}</span>
+                </div>
+                <div className="mt-2 pt-1 border-t border-slate-700/30">
+                  <MiniSparkline
+                    data={metrics.download.telemetry}
+                    color="#22d3ee"
+                    gradientId="homeMiniDownSpark"
+                    height={28}
+                  />
+                </div>
               </div>
 
-              <div className={`bg-slate-800/40 p-4 rounded-2xl border border-slate-700/50 text-center transition-all ${metrics.phase === 'upload' ? 'border-blue-500/60 ring-1 ring-blue-500/30' : ''}`}>
-                <span className="text-[10px] text-slate-400 uppercase font-bold block mb-1">Upload</span>
-                <span className="text-2xl font-bold text-white font-mono-num">
-                  {metrics.upload.avg > 0 ? metrics.upload.avg.toFixed(1) : metrics.upload.current > 0 ? metrics.upload.current.toFixed(1) : '0.0'}
-                </span>
-                <span className="text-xs text-slate-500 ml-1">{settings.unit}</span>
+              <div className={`bg-slate-800/40 p-3 sm:p-4 rounded-2xl border border-slate-700/50 flex flex-col justify-between text-center transition-all ${metrics.phase === 'upload' ? 'border-blue-500/60 ring-1 ring-blue-500/30' : ''}`}>
+                <div>
+                  <span className="text-[10px] text-slate-400 uppercase font-bold block mb-1">Upload</span>
+                  <span className="text-xl sm:text-2xl font-bold text-white font-mono-num">
+                    {metrics.upload.avg > 0 ? metrics.upload.avg.toFixed(1) : metrics.upload.current > 0 ? metrics.upload.current.toFixed(1) : '0.0'}
+                  </span>
+                  <span className="text-xs text-slate-500 ml-1">{settings.unit}</span>
+                </div>
+                <div className="mt-2 pt-1 border-t border-slate-700/30">
+                  <MiniSparkline
+                    data={metrics.upload.telemetry}
+                    color="#3b82f6"
+                    gradientId="homeMiniUpSpark"
+                    height={28}
+                  />
+                </div>
               </div>
 
-              <div className={`bg-slate-800/40 p-4 rounded-2xl border border-slate-700/50 text-center transition-all ${metrics.phase === 'latency' ? 'border-purple-500/60 ring-1 ring-purple-500/30' : ''}`}>
-                <span className="text-[10px] text-slate-400 uppercase font-bold block mb-1">Ping</span>
-                <span className="text-2xl font-bold text-white font-mono-num">
-                  {metrics.ping.avg > 0 ? metrics.ping.avg : metrics.ping.current > 0 ? metrics.ping.current : '0'}
-                </span>
-                <span className="text-xs text-slate-500 ml-1">ms</span>
+              <div className={`bg-slate-800/40 p-3 sm:p-4 rounded-2xl border border-slate-700/50 flex flex-col justify-between text-center transition-all ${metrics.phase === 'latency' ? 'border-purple-500/60 ring-1 ring-purple-500/30' : ''}`}>
+                <div>
+                  <span className="text-[10px] text-slate-400 uppercase font-bold block mb-1">Ping</span>
+                  <span className="text-xl sm:text-2xl font-bold text-white font-mono-num">
+                    {metrics.ping.avg > 0 ? metrics.ping.avg : metrics.ping.current > 0 ? metrics.ping.current : '0'}
+                  </span>
+                  <span className="text-xs text-slate-500 ml-1">ms</span>
+                </div>
+                <div className="mt-2 pt-1 border-t border-slate-700/30">
+                  <MiniSparkline
+                    data={metrics.ping.samples}
+                    color="#c084fc"
+                    gradientId="homeMiniPingSpark"
+                    height={28}
+                  />
+                </div>
               </div>
 
-              <div className="bg-slate-800/40 p-4 rounded-2xl border border-slate-700/50 text-center">
-                <span className="text-[10px] text-slate-400 uppercase font-bold block mb-1">Jitter</span>
-                <span className="text-2xl font-bold text-white font-mono-num">
-                  {metrics.ping.jitter > 0 ? metrics.ping.jitter : '0'}
-                </span>
-                <span className="text-xs text-slate-500 ml-1">ms</span>
+              <div className="bg-slate-800/40 p-3 sm:p-4 rounded-2xl border border-slate-700/50 flex flex-col justify-between text-center">
+                <div>
+                  <span className="text-[10px] text-slate-400 uppercase font-bold block mb-1">Jitter</span>
+                  <span className="text-xl sm:text-2xl font-bold text-white font-mono-num">
+                    {metrics.ping.jitter > 0 ? metrics.ping.jitter : '0'}
+                  </span>
+                  <span className="text-xs text-slate-500 ml-1">ms</span>
+                </div>
+                <div className="mt-2 pt-1 border-t border-slate-700/30">
+                  <MiniSparkline
+                    data={metrics.ping.samples.map((s, idx, arr) => idx === 0 ? 0 : Math.abs(s - arr[idx - 1]))}
+                    color="#60a5fa"
+                    gradientId="homeMiniJitterSpark"
+                    height={28}
+                  />
+                </div>
               </div>
             </div>
           </section>
@@ -144,6 +186,7 @@ export const HomePage: React.FC<HomePageProps> = ({
                 unit={settings.unit}
                 onTestAgain={onStartTest}
                 onOpenShareModal={onOpenShareModal}
+                onAskAI={onAskAI}
               />
             </div>
           )}
@@ -151,6 +194,34 @@ export const HomePage: React.FC<HomePageProps> = ({
 
         {/* Aside Column: Connection Details & Sticky Sidebar Ad */}
         <aside className="w-full lg:w-1/3 flex flex-col gap-6">
+          {/* AI Specialist Quick Banner */}
+          {onAskAI && (
+            <div className="bg-gradient-to-br from-cyan-950/60 via-slate-900/60 to-blue-950/60 border border-cyan-500/30 rounded-3xl p-5 shadow-lg backdrop-blur-md">
+              <div className="flex items-center gap-3 mb-2.5">
+                <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-cyan-400 to-blue-600 flex items-center justify-center text-white shadow-md shadow-cyan-500/20">
+                  <Sparkles className="w-4 h-4 animate-pulse" />
+                </div>
+                <div>
+                  <h4 className="text-sm font-bold text-white flex items-center gap-1.5">
+                    Live AI Support
+                    <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
+                  </h4>
+                  <p className="text-[11px] text-cyan-300">Ask questions & diagnose your speeds</p>
+                </div>
+              </div>
+              <p className="text-xs text-slate-400 leading-relaxed mb-3">
+                Have questions about high ping, Wi-Fi channel optimization, or buffering? Chat with our live AI Network Specialist.
+              </p>
+              <button
+                onClick={() => onAskAI()}
+                className="w-full py-2.5 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white rounded-xl text-xs font-bold shadow-md shadow-cyan-500/20 transition-all hover:scale-[1.02] active:scale-[0.98] flex items-center justify-center gap-2 cursor-pointer"
+              >
+                <Sparkles className="w-3.5 h-3.5" />
+                <span>OPEN AI SUPPORT CHAT</span>
+              </button>
+            </div>
+          )}
+
           {/* Connection Details Card */}
           <div className="bg-slate-900/30 border border-slate-800 rounded-3xl p-6 flex flex-col justify-between flex-grow">
             <div>

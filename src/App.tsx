@@ -4,6 +4,8 @@ import { Footer } from './components/Footer';
 import { ShareModal } from './components/ShareModal';
 import { HistoryDrawer } from './components/HistoryDrawer';
 import { SettingsModal } from './components/SettingsModal';
+import { AIChatDrawer } from './components/AIChatDrawer';
+import { AIFloatingButton } from './components/AIFloatingButton';
 import { HomePage } from './pages/HomePage';
 import { AboutPage } from './pages/AboutPage';
 import { HowItWorksPage } from './pages/HowItWorksPage';
@@ -39,6 +41,8 @@ export default function App() {
   const [isShareModalOpen, setIsShareModalOpen] = useState(false);
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [isAIChatOpen, setIsAIChatOpen] = useState(false);
+  const [aiInitialPrompt, setAiInitialPrompt] = useState<string | null>(null);
 
   // Settings & History with LocalStorage
   const [settings, setSettings] = useState<TestSettings>(() => {
@@ -212,6 +216,7 @@ export default function App() {
         onNavigate={setCurrentRoute}
         onOpenHistory={() => setIsHistoryOpen(true)}
         onOpenSettings={() => setIsSettingsOpen(true)}
+        onOpenAIChat={() => setIsAIChatOpen(true)}
         server={server}
         theme={theme}
         onToggleTheme={handleToggleTheme}
@@ -230,6 +235,12 @@ export default function App() {
             onStopTest={handleStopTest}
             onOpenShareModal={() => setIsShareModalOpen(true)}
             onOpenSettings={() => setIsSettingsOpen(true)}
+            onAskAI={(prompt?: string) => {
+              if (prompt) {
+                setAiInitialPrompt(prompt);
+              }
+              setIsAIChatOpen(true);
+            }}
           />
         )}
 
@@ -240,6 +251,25 @@ export default function App() {
         {currentRoute === 'contact' && <ContactPage onNavigate={setCurrentRoute} />}
         {currentRoute === 'cookies' && <CookiesPage onNavigate={setCurrentRoute} />}
       </div>
+
+      {/* Live AI Question Solving Support Chat Drawer */}
+      <AIChatDrawer
+        isOpen={isAIChatOpen}
+        onClose={() => setIsAIChatOpen(false)}
+        metrics={metrics}
+        assessment={assessment}
+        server={server}
+        client={client}
+        unit={settings.unit}
+        initialPrompt={aiInitialPrompt}
+        onClearInitialPrompt={() => setAiInitialPrompt(null)}
+      />
+
+      {/* Floating AI Trigger Button */}
+      <AIFloatingButton
+        isOpen={isAIChatOpen}
+        onClick={() => setIsAIChatOpen(true)}
+      />
 
       {/* Share & Certificate Export Modal */}
       <ShareModal
