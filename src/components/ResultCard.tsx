@@ -48,11 +48,13 @@ export const ResultCard: React.FC<ResultCardProps> = ({
   const [showTechnicalDetails, setShowTechnicalDetails] = useState(false);
 
   const copySummaryText = () => {
+    const downMbs = (metrics.download.avg / 8).toFixed(2);
+    const upMbs = (metrics.upload.avg / 8).toFixed(2);
     const text = `⚡ NetPulse Speed Test Results ⚡
 ----------------------------------
-⬇️ Download: ${metrics.download.avg} ${unit} (Peak: ${metrics.download.peak} ${unit})
-⬆️ Upload: ${metrics.upload.avg} ${unit} (Peak: ${metrics.upload.peak} ${unit})
-📶 Ping: ${metrics.ping.avg} ms (Min: ${metrics.ping.min} ms)
+⬇️ Download: ${metrics.download.avg} Mbps (${downMbs} MB/s) [Peak: ${metrics.download.peak} Mbps]
+⬆️ Upload: ${metrics.upload.avg} Mbps (${upMbs} MB/s) [Peak: ${metrics.upload.peak} Mbps]
+📶 Ping: ${metrics.ping.avg} ms (Min: ${metrics.ping.min} ms, Max: ${metrics.ping.max} ms)
 〰️ Jitter: ${metrics.ping.jitter} ms
 🏆 Connection Rating: ${assessment.grade} (${assessment.label})
 🖥️ Server: ${server ? server.name : 'NetPulse Edge'}
@@ -144,16 +146,26 @@ Test your internet speed at NetPulse Test`;
                 DOWNLOAD
               </span>
               <span className="text-[10px] text-slate-500 font-mono-num">
-                Peak: {metrics.download.peak}
+                Peak: {metrics.download.peak} {unit}
               </span>
             </div>
             <div className="my-2">
-              <span className="font-mono-num text-4xl sm:text-5xl font-bold text-white tracking-tight">
-                {metrics.download.avg}
-              </span>
-              <span className="ml-1 text-xs sm:text-sm font-medium text-slate-400">
-                {unit}
-              </span>
+              <div className="flex items-baseline">
+                <span className="font-mono-num text-4xl sm:text-5xl font-bold text-white tracking-tight">
+                  {metrics.download.avg}
+                </span>
+                <span className="ml-1 text-xs sm:text-sm font-semibold text-cyan-400">
+                  {unit}
+                </span>
+              </div>
+              {/* Dual Unit Secondary Readout */}
+              <div className="mt-1 flex items-center gap-1.5">
+                <span className="px-2 py-0.5 rounded text-[11px] font-mono font-medium bg-slate-800/80 border border-slate-700/60 text-slate-300">
+                  {unit === 'Mbps' 
+                    ? `≈ ${(metrics.download.avg / 8).toFixed(2)} MB/s` 
+                    : `≈ ${(metrics.download.avg * 8).toFixed(2)} Mbps`}
+                </span>
+              </div>
             </div>
             <div className="mt-1 mb-2">
               <MiniSparkline
@@ -176,16 +188,26 @@ Test your internet speed at NetPulse Test`;
                 UPLOAD
               </span>
               <span className="text-[10px] text-slate-500 font-mono-num">
-                Peak: {metrics.upload.peak}
+                Peak: {metrics.upload.peak} {unit}
               </span>
             </div>
             <div className="my-2">
-              <span className="font-mono-num text-4xl sm:text-5xl font-bold text-white tracking-tight">
-                {metrics.upload.avg}
-              </span>
-              <span className="ml-1 text-xs sm:text-sm font-medium text-slate-400">
-                {unit}
-              </span>
+              <div className="flex items-baseline">
+                <span className="font-mono-num text-4xl sm:text-5xl font-bold text-white tracking-tight">
+                  {metrics.upload.avg}
+                </span>
+                <span className="ml-1 text-xs sm:text-sm font-semibold text-blue-400">
+                  {unit}
+                </span>
+              </div>
+              {/* Dual Unit Secondary Readout */}
+              <div className="mt-1 flex items-center gap-1.5">
+                <span className="px-2 py-0.5 rounded text-[11px] font-mono font-medium bg-slate-800/80 border border-slate-700/60 text-slate-300">
+                  {unit === 'Mbps' 
+                    ? `≈ ${(metrics.upload.avg / 8).toFixed(2)} MB/s` 
+                    : `≈ ${(metrics.upload.avg * 8).toFixed(2)} Mbps`}
+                </span>
+              </div>
             </div>
             <div className="mt-1 mb-2">
               <MiniSparkline

@@ -365,24 +365,43 @@ export const SpeedGauge: React.FC<SpeedGaugeProps> = ({
         {/* Live Mini Counters while Testing */}
         <div className="grid grid-cols-3 gap-2 sm:gap-4 mt-4 w-full">
           <div className="p-2.5 rounded-lg bg-slate-900/60 border border-slate-800/80 text-center">
-            <span className="text-[11px] text-slate-400 block font-medium">Ping</span>
-            <span className="font-mono-num text-sm sm:text-base font-bold text-purple-300">
+            <span className="text-[11px] text-slate-400 block font-medium">Ping / Jitter</span>
+            <span className="font-mono-num text-xs sm:text-sm font-bold text-purple-300">
               {metrics.ping.avg > 0 ? `${metrics.ping.avg} ms` : '--'}
+              {metrics.ping.jitter > 0 && (
+                <span className="text-[10px] text-purple-400 font-normal ml-1">
+                  (±{metrics.ping.jitter}ms)
+                </span>
+              )}
             </span>
           </div>
 
           <div className="p-2.5 rounded-lg bg-slate-900/60 border border-slate-800/80 text-center">
             <span className="text-[11px] text-slate-400 block font-medium">Download</span>
-            <span className="font-mono-num text-sm sm:text-base font-bold text-cyan-300">
-              {metrics.download.current > 0 ? `${metrics.download.current.toFixed(1)} ${unit}` : '--'}
-            </span>
+            <div className="flex flex-col items-center">
+              <span className="font-mono-num text-xs sm:text-sm font-bold text-cyan-300">
+                {metrics.download.current > 0 ? `${metrics.download.current.toFixed(1)} ${unit}` : '--'}
+              </span>
+              {metrics.download.current > 0 && (
+                <span className="text-[10px] text-slate-400 font-mono">
+                  {(metrics.download.current / 8).toFixed(2)} MB/s
+                </span>
+              )}
+            </div>
           </div>
 
           <div className="p-2.5 rounded-lg bg-slate-900/60 border border-slate-800/80 text-center">
             <span className="text-[11px] text-slate-400 block font-medium">Upload</span>
-            <span className="font-mono-num text-sm sm:text-base font-bold text-emerald-300">
-              {metrics.upload.current > 0 ? `${metrics.upload.current.toFixed(1)} ${unit}` : '--'}
-            </span>
+            <div className="flex flex-col items-center">
+              <span className="font-mono-num text-xs sm:text-sm font-bold text-emerald-300">
+                {metrics.upload.current > 0 ? `${metrics.upload.current.toFixed(1)} ${unit}` : '--'}
+              </span>
+              {metrics.upload.current > 0 && (
+                <span className="text-[10px] text-slate-400 font-mono">
+                  {(metrics.upload.current / 8).toFixed(2)} MB/s
+                </span>
+              )}
+            </div>
           </div>
         </div>
       </div>

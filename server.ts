@@ -4,8 +4,8 @@ import crypto from 'crypto';
 import { createServer as createViteServer } from 'vite';
 import { GoogleGenAI } from '@google/genai';
 
-// Pre-allocate 4MB of pseudo-random buffer to prevent CPU overhead/compression during high-speed download testing
-const CHUNK_SIZE = 4 * 1024 * 1024; // 4 MB
+// Pre-allocate 8MB of pseudo-random buffer to prevent CPU overhead/compression during high-speed download testing
+const CHUNK_SIZE = 8 * 1024 * 1024; // 8 MB
 const RANDOM_BUFFER = crypto.randomBytes(CHUNK_SIZE);
 
 // Lazy-initialized Gemini AI client
@@ -33,16 +33,23 @@ async function startServer() {
   // Basic CORS & Security headers for speed-test endpoints
   app.use((req, res, next) => {
     res.setHeader('Access-Control-Allow-Origin', '*');
-    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Cache-Control, X-Client-Timestamp');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, HEAD, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Cache-Control, Pragma, X-Client-Timestamp, X-Requested-With');
+    res.setHeader('Access-Control-Expose-Headers', 'Content-Length, Content-Type, X-Server-Timing');
     if (req.method === 'OPTIONS') {
       return res.status(204).end();
     }
     next();
   });
 
-  // Enable JSON body parsing for API endpoints
-  app.use(express.json({ limit: '2mb' }));
+  // Enable JSON body parsing for API endpoints (exclude binary upload endpoint)
+  app.use((req, res, next) => {
+    if (req.path === '/api/speedtest/upload') {
+      next();
+    } else {
+      express.json({ limit: '2mb' })(req, res, next);
+    }
+  });
 
   // Health check endpoint
   app.get('/api/health', (_req: Request, res: Response) => {
@@ -54,33 +61,44 @@ async function startServer() {
     });
   });
 
-  // 1. High Precision Ping & Latency Endpoint
-  app.get('/api/speedtest/ping', (req: Request, res: Response) => {
-    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');
+  // 1. High Precision Ping & Latency Endpoint (Ultra Low Latency)
+  app.all('/api/speedtest/ping', (req: Request, res: Response) => {
+    // Disable socket delay (Nagle's algorithm)
+    if (req.socket) {
+      req.socket.setNoDelay(true);
+    }
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0');
     res.setHeader('Pragma', 'no-cache');
     res.setHeader('Expires', '0');
     res.setHeader('Content-Type', 'application/json');
+    res.setHeader('Content-Encoding', 'identity');
 
     const clientTimestamp = req.headers['x-client-timestamp'] || req.query.t;
-    res.json({
+    res.status(200).send(JSON.stringify({
       serverTime: Date.now(),
       clientTime: clientTimestamp ? Number(clientTimestamp) : null,
       status: 'pong'
-    });
+    }));
   });
 
-  // 2. High Throughput Download Stream Endpoint
+  // 2. High Throughput Download Stream Endpoint (Multi-Threaded Saturator)
   app.get('/api/speedtest/download', (req: Request, res: Response) => {
-    // Prevent any browser or intermediary proxy caching
-    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');
+    // Disable socket delay
+    if (req.socket) {
+      req.socket.setNoDelay(true);
+    }
+
+    // Prevent any browser or intermediary proxy caching & compression
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0');
     res.setHeader('Pragma', 'no-cache');
     res.setHeader('Expires', '0');
     res.setHeader('Content-Type', 'application/octet-stream');
+    res.setHeader('Content-Encoding', 'identity');
     res.setHeader('Content-Disposition', 'attachment; filename="speedtest.bin"');
 
-    // Desired byte size (default 10MB, cap at 100MB per single request)
-    const requestedBytes = parseInt(req.query.bytes as string, 10) || 10 * 1024 * 1024;
-    const totalBytes = Math.min(Math.max(requestedBytes, 64 * 1024), 100 * 1024 * 1024);
+    // Desired byte size (default 25MB, cap at 150MB per single request)
+    const requestedBytes = parseInt(req.query.bytes as string, 10) || 25 * 1024 * 1024;
+    const totalBytes = Math.min(Math.max(requestedBytes, 64 * 1024), 150 * 1024 * 1024);
     
     res.setHeader('Content-Length', totalBytes.toString());
 
@@ -89,14 +107,14 @@ async function startServer() {
     function sendChunks() {
       while (bytesSent < totalBytes) {
         const remaining = totalBytes - bytesSent;
-        const chunkSize = Math.min(remaining, CHUNK_SIZE);
+        const currentChunkSize = Math.min(remaining, CHUNK_SIZE);
         
-        // Write chunk directly
-        const canContinue = res.write(RANDOM_BUFFER.subarray(0, chunkSize));
-        bytesSent += chunkSize;
+        // Write slice of pre-generated uncompressible random buffer directly
+        const canContinue = res.write(RANDOM_BUFFER.subarray(0, currentChunkSize));
+        bytesSent += currentChunkSize;
 
         if (!canContinue) {
-          // If backpressure, pause until drain
+          // Pause if buffer is full, resume when socket is drained
           res.once('drain', sendChunks);
           return;
         }
@@ -109,7 +127,12 @@ async function startServer() {
 
   // 3. High Throughput Upload Stream Endpoint
   app.post('/api/speedtest/upload', (req: Request, res: Response) => {
-    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');
+    if (req.socket) {
+      req.socket.setNoDelay(true);
+    }
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0');
+    res.setHeader('Content-Type', 'application/json');
+    res.setHeader('Content-Encoding', 'identity');
     
     const startTime = Date.now();
     let bytesReceived = 0;
@@ -120,9 +143,9 @@ async function startServer() {
 
     req.on('end', () => {
       const durationMs = Math.max(Date.now() - startTime, 1);
-      const speedMbps = ((bytesReceived * 8) / (durationMs / 1000)) / (1024 * 1024);
+      const speedMbps = ((bytesReceived * 8) / (durationMs / 1000)) / (1000 * 1000);
       
-      res.json({
+      res.status(200).json({
         bytesReceived,
         durationMs,
         speedMbps: Number(speedMbps.toFixed(2)),
@@ -132,7 +155,9 @@ async function startServer() {
 
     req.on('error', (err) => {
       console.error('Upload stream error:', err);
-      res.status(500).json({ error: 'Upload stream failed' });
+      if (!res.headersSent) {
+        res.status(500).json({ error: 'Upload stream failed' });
+      }
     });
   });
 
