@@ -219,22 +219,42 @@ export class SpeedTestEngine {
   // --- 2. Real Multi-Stream Download Throughput Engine ---
   private async runDownloadTest(durationSec: number = 9, streams: number = 6): Promise<void> {
     const signal = this.abortController?.signal;
+
+    // A. Explicit Download Warm-Up Probe (Allows TCP Slow-Start, TLS buffers, and 4G/5G carrier radio to awaken)
+    try {
+      await fetch(`/api/speedtest/download?bytes=1048576&warmup=1&t=${Date.now()}`, {
+        cache: 'no-store',
+        signal,
+        headers: { 'Cache-Control': 'no-cache', Pragma: 'no-cache' },
+      }).then(r => r.body?.getReader().read()).catch(() => {});
+    } catch {
+      // Warmup fail-safe
+    }
+
+    if (signal?.aborted) return;
+
     const testStartTime = performance.now();
     const testEndTime = testStartTime + durationSec * 1000;
-    const warmUpDurationMs = 1200; // 1.2s warm-up phase (allows TCP window & 4G/5G carrier radio to ramp up)
+    const warmUpGracePeriodMs = 1000; // Discard initial 1.0s ramp-up from final average
 
     let totalBytesLoaded = 0;
     const rateSamples: number[] = [];
     const telemetry: number[] = [];
 
-    // Sliding window tracking (measuring instantaneous throughput across 350ms window)
+    // High-resolution sliding window for instantaneous throughput
     let lastWindowBytes = 0;
     let lastWindowTime = testStartTime;
+    let smoothedSpeedMbps = 0;
 
-    // Use 25MB chunks per stream to saturate multi-gigabit connections without constant reconnects
-    const streamChunkBytes = this.settings.dataSaverMode ? 5 * 1024 * 1024 : 25 * 1024 * 1024;
+    // High capacity chunk per stream (15MB - 35MB) to keep TCP pipes continuously full
+    const streamChunkBytes = this.settings.dataSaverMode ? 6 * 1024 * 1024 : 35 * 1024 * 1024;
 
     const downloadWorker = async (streamId: number) => {
+      // Stagger stream starts slightly (25ms) to prevent single-packet TCP synchronization drops
+      if (streamId > 0) {
+        await new Promise((r) => setTimeout(r, streamId * 25));
+      }
+
       while (performance.now() < testEndTime && !signal?.aborted) {
         try {
           const res = await fetch(`/api/speedtest/download?bytes=${streamChunkBytes}&s=${streamId}&t=${Date.now()}`, {
@@ -272,38 +292,46 @@ export class SpeedTestEngine {
         } catch (e: any) {
           if (signal?.aborted) return;
           // Graceful retry backoff
-          await new Promise((r) => setTimeout(r, 60));
+          await new Promise((r) => setTimeout(r, 50));
         }
       }
     };
 
-    // Real-time telemetry ticker (every 80ms)
+    // Real-time telemetry ticker (every 60ms for ultra-responsive live feedback)
     const ticker = setInterval(() => {
       const now = performance.now();
       const elapsedTotalSec = (now - testStartTime) / 1000;
       const windowDeltaSec = (now - lastWindowTime) / 1000;
 
-      if (windowDeltaSec >= 0.15) {
+      if (windowDeltaSec >= 0.1) {
         const deltaBytes = totalBytesLoaded - lastWindowBytes;
         // Formula: Mbps = (Delta Bytes * 8) / (Delta Seconds * 1,000,000)
-        const instantMbps = (deltaBytes * 8) / (windowDeltaSec * 1000000);
-        const roundedInstantMbps = Number(instantMbps.toFixed(2));
-
-        // Record post-warmup measurements for statistical trimmed mean calculation
-        if (now - testStartTime > warmUpDurationMs && roundedInstantMbps > 0.05) {
-          rateSamples.push(roundedInstantMbps);
+        const rawInstantMbps = (deltaBytes * 8) / (windowDeltaSec * 1000000);
+        
+        // Exponential Moving Average (EMA) filter for responsive yet non-jittery live UI rendering
+        if (smoothedSpeedMbps === 0) {
+          smoothedSpeedMbps = rawInstantMbps;
+        } else {
+          smoothedSpeedMbps = smoothedSpeedMbps * 0.4 + rawInstantMbps * 0.6;
         }
 
-        telemetry.push(roundedInstantMbps);
+        const displaySpeed = Number(smoothedSpeedMbps.toFixed(2));
+
+        // Record post-warmup measurements for statistical plateau determination
+        if (now - testStartTime > warmUpGracePeriodMs && displaySpeed > 0.05) {
+          rateSamples.push(displaySpeed);
+        }
+
+        telemetry.push(displaySpeed);
         if (telemetry.length > 100) telemetry.shift();
 
-        const peak = Math.max(this.metrics.download.peak, roundedInstantMbps);
+        const peak = Math.max(this.metrics.download.peak, displaySpeed);
         const progressFraction = Math.min(elapsedTotalSec / durationSec, 1);
 
         this.metrics.download = {
-          current: roundedInstantMbps,
+          current: displaySpeed,
           peak,
-          avg: roundedInstantMbps,
+          avg: displaySpeed,
           bytesTransferred: totalBytesLoaded,
           telemetry: [...telemetry],
         };
@@ -313,15 +341,15 @@ export class SpeedTestEngine {
         lastWindowBytes = totalBytesLoaded;
         lastWindowTime = now;
       }
-    }, 80);
+    }, 60);
 
-    // Launch concurrent parallel workers
+    // Launch concurrent parallel workers (4-6 streams)
     const activeWorkers = Array.from({ length: streams }, (_, i) => downloadWorker(i));
     await Promise.all(activeWorkers);
     clearInterval(ticker);
 
     // Final Stable Score Calculation (Trimmed Mean / Plateau Median)
-    // Exclude bottom 15% (slow start/ramp) and top 5% (cache burst outliers)
+    // Discards the bottom 15% (slow start/ramp) and top 5% (cache burst outliers)
     let finalStableMbps = 0;
     if (rateSamples.length > 0) {
       const sorted = [...rateSamples].sort((a, b) => a - b);

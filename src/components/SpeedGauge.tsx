@@ -90,15 +90,64 @@ export const SpeedGauge: React.FC<SpeedGaugeProps> = ({
   const needleAngle = normalizedValue * 240;
 
   const isTesting = phase !== 'idle' && phase !== 'completed' && phase !== 'error';
+  const isDownload = phase === 'download';
+  
+  // Dynamic pulse speed & intensity based on current download speed (faster pulse as speed increases)
+  const downloadSpeed = metrics.download.current;
+  const pulseDuration = Math.max(0.6, 1.8 - Math.min(downloadSpeed / 100, 1) * 1.0);
 
   return (
     <div className="relative flex flex-col items-center justify-center p-4 select-none">
-      {/* Outer Pulse Glow Ring during active testing */}
+      {/* Outer Pulse Glow Rings during active testing with special Download speed acceleration */}
       {isTesting && (
-        <div 
-          className="absolute w-72 h-72 sm:w-84 sm:h-84 rounded-full -z-10 animate-ping opacity-20"
-          style={{ backgroundColor: accentColor }}
-        />
+        <>
+          {/* Layer 1: Ambient soft aura */}
+          <motion.div 
+            className="absolute w-72 h-72 sm:w-84 sm:h-84 rounded-full -z-20 pointer-events-none blur-2xl"
+            animate={{
+              scale: isDownload ? [1, 1.18, 1] : [1, 1.08, 1],
+              opacity: isDownload ? [0.25, 0.55, 0.25] : [0.15, 0.35, 0.15],
+            }}
+            transition={{
+              duration: isDownload ? pulseDuration : 1.5,
+              repeat: Infinity,
+              ease: 'easeInOut',
+            }}
+            style={{ backgroundColor: accentColor }}
+          />
+
+          {/* Layer 2: Expanding energetic shockwave ring */}
+          <motion.div 
+            className="absolute w-72 h-72 sm:w-84 sm:h-84 rounded-full -z-10 pointer-events-none border-2"
+            animate={{
+              scale: [0.95, isDownload ? 1.35 : 1.2],
+              opacity: isDownload ? [0.6, 0] : [0.35, 0],
+            }}
+            transition={{
+              duration: isDownload ? pulseDuration : 1.5,
+              repeat: Infinity,
+              ease: 'easeOut',
+            }}
+            style={{ borderColor: accentColor }}
+          />
+
+          {/* Layer 3: High-speed secondary micro pulse for download */}
+          {isDownload && downloadSpeed > 20 && (
+            <motion.div 
+              className="absolute w-64 h-64 sm:w-72 sm:h-72 rounded-full -z-10 pointer-events-none border border-cyan-300/40"
+              animate={{
+                scale: [0.98, 1.22],
+                opacity: [0.7, 0],
+              }}
+              transition={{
+                duration: pulseDuration * 0.7,
+                repeat: Infinity,
+                ease: 'easeOut',
+                delay: pulseDuration * 0.3,
+              }}
+            />
+          )}
+        </>
       )}
 
       {/* Main Gauge SVG Viewport */}
