@@ -9,7 +9,7 @@ interface AdSlotProps {
 
 const BANNER_ID = 'container-80bb0e811855d34f3c4c839bbc54ac9d';
 const BANNER_SRC =
-  'https://pl3114018.profitablecpmnetwork.com/80bb0e811855d34f3c4c839bbc54ac9d/invoke.js';
+  'https://pl31114018.profitableratecpmnetwork.com/80bb0e811855d34f3c4c839bbc54ac9d/invoke.js';
 
 export const AdSlot: React.FC<AdSlotProps> = ({ position, className = '' }) => {
   const loadedRef = useRef(false);
