@@ -103,6 +103,8 @@ export type PageRoute =
   | 'home'
   | 'about'
   | 'how-it-works'
+  | 'blog'
+  | 'faq'
   | 'privacy'
   | 'terms'
   | 'contact'

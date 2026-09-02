@@ -10,17 +10,19 @@ import {
   Zap, 
   Activity, 
   RotateCcw,
-  Sparkles,
   HelpCircle,
   TrendingUp,
-  Cpu
+  Cpu,
+  BookOpen,
+  ArrowRight
 } from 'lucide-react';
 import { SpeedGauge } from '../components/SpeedGauge';
 import { LiveTelemetryChart, MiniSparkline } from '../components/LiveTelemetryChart';
 import { ResultCard } from '../components/ResultCard';
 import { AdSlot } from '../components/AdSlot';
 import { SpeedTestProgressBar } from '../components/SpeedTestProgressBar';
-import { SpeedMetrics, QualityAssessment, ServerNode, ClientInfo, TestSettings } from '../types';
+import { SpeedTestGuidesSection } from '../components/SpeedTestGuidesSection';
+import { SpeedMetrics, QualityAssessment, ServerNode, ClientInfo, TestSettings, PageRoute } from '../types';
 
 interface HomePageProps {
   metrics: SpeedMetrics;
@@ -32,7 +34,7 @@ interface HomePageProps {
   onStopTest: () => void;
   onOpenShareModal: () => void;
   onOpenSettings: () => void;
-  onAskAI?: (prompt?: string) => void;
+  onNavigate?: (route: PageRoute) => void;
 }
 
 export const HomePage: React.FC<HomePageProps> = ({
@@ -45,7 +47,7 @@ export const HomePage: React.FC<HomePageProps> = ({
   onStopTest,
   onOpenShareModal,
   onOpenSettings,
-  onAskAI,
+  onNavigate,
 }) => {
   const isCompleted = metrics.phase === 'completed';
   const isTesting = metrics.phase !== 'idle' && metrics.phase !== 'completed' && metrics.phase !== 'error';
@@ -224,7 +226,6 @@ export const HomePage: React.FC<HomePageProps> = ({
                 unit={settings.unit}
                 onTestAgain={onStartTest}
                 onOpenShareModal={onOpenShareModal}
-                onAskAI={onAskAI}
               />
             </div>
           )}
@@ -232,30 +233,29 @@ export const HomePage: React.FC<HomePageProps> = ({
 
         {/* Aside Column: Connection Details & Sticky Sidebar Ad */}
         <aside className="w-full lg:w-1/3 flex flex-col gap-6">
-          {/* AI Specialist Quick Banner */}
-          {onAskAI && (
-            <div className="bg-gradient-to-br from-cyan-950/60 via-slate-900/60 to-blue-950/60 border border-cyan-500/30 rounded-3xl p-5 shadow-lg backdrop-blur-md">
+          {/* Quick Network Knowledge Callout */}
+          {onNavigate && (
+            <div className="bg-gradient-to-br from-cyan-950/50 via-slate-900/60 to-blue-950/50 border border-cyan-500/20 rounded-3xl p-5 shadow-lg backdrop-blur-md">
               <div className="flex items-center gap-3 mb-2.5">
-                <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-cyan-400 to-blue-600 flex items-center justify-center text-white shadow-md shadow-cyan-500/20">
-                  <Sparkles className="w-4 h-4 animate-pulse" />
+                <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-cyan-400 to-blue-600 flex items-center justify-center text-slate-950 shadow-md shadow-cyan-500/20 font-bold">
+                  <BookOpen className="w-4 h-4 text-slate-950" />
                 </div>
                 <div>
                   <h4 className="text-sm font-bold text-white flex items-center gap-1.5">
-                    Live AI Support
-                    <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
+                    Speed & Network Guides
                   </h4>
-                  <p className="text-[11px] text-cyan-300">Ask questions & diagnose your speeds</p>
+                  <p className="text-[11px] text-cyan-300">Understand Mbps vs MB/s & Wi-Fi fixes</p>
                 </div>
               </div>
               <p className="text-xs text-slate-400 leading-relaxed mb-3">
-                Have questions about high ping, Wi-Fi channel optimization, or buffering? Chat with our live AI Network Specialist.
+                Learn why actual file download rates differ from advertised speeds and how to lower gaming ping.
               </p>
               <button
-                onClick={() => onAskAI()}
-                className="w-full py-2.5 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white rounded-xl text-xs font-bold shadow-md shadow-cyan-500/20 transition-all hover:scale-[1.02] active:scale-[0.98] flex items-center justify-center gap-2 cursor-pointer"
+                onClick={() => onNavigate('blog')}
+                className="w-full py-2.5 bg-slate-800 hover:bg-slate-700 text-cyan-300 hover:text-white rounded-xl text-xs font-semibold border border-cyan-500/30 transition-all flex items-center justify-center gap-2 cursor-pointer"
               >
-                <Sparkles className="w-3.5 h-3.5" />
-                <span>OPEN AI SUPPORT CHAT</span>
+                <span>Read Troubleshooting Guides</span>
+                <ArrowRight className="w-3.5 h-3.5 text-cyan-400" />
               </button>
             </div>
           )}
@@ -355,129 +355,8 @@ export const HomePage: React.FC<HomePageProps> = ({
           </div>
         </div>
       </div>
-    {/* SEO Content Section */}
-      <article className="w-full max-w-7xl mt-8">
-        <section className="p-6 sm:p-8 rounded-3xl bg-slate-900/30 border border-slate-800">
-
-          <h1 className="text-2xl sm:text-3xl font-bold text-white mb-3">
-            Free Internet Speed Test Online — Check WiFi & Mobile Data Speed | NetPulse
-          </h1>
-          <p className="text-sm text-slate-400 leading-relaxed mb-6">
-            NetPulse is a free online internet speed test tool that instantly measures your
-            download speed, upload speed, ping, and jitter with high accuracy. Whether you're
-            on WiFi, broadband, fiber, or mobile data (4G/5G), NetPulse gives you a reliable
-            connection quality report in seconds — no app download, no sign-up, completely free.
-          </p>
-
-          <h2 className="text-lg sm:text-xl font-bold text-white mb-2">
-            Why NetPulse Is the Best Speed Test Tool
-          </h2>
-          <ul className="text-sm text-slate-400 leading-relaxed mb-6 list-disc list-inside space-y-1">
-            <li>100% free internet speed test — no registration required</li>
-            <li>Real-time, server-based accurate measurement</li>
-            <li>Works on mobile, tablet, laptop, and desktop</li>
-            <li>Tests download speed, upload speed, ping, and jitter simultaneously</li>
-            <li>Compatible with WiFi, broadband, fiber, and mobile networks (4G/5G)</li>
-            <li>Detailed connection quality grading and history tracking</li>
-          </ul>
-
-          <h2 className="text-lg sm:text-xl font-bold text-white mb-2">
-            How Does an Internet Speed Test Work?
-          </h2>
-          <p className="text-sm text-slate-400 leading-relaxed mb-6">
-            A speed test measures three core metrics. Download speed shows how fast data
-            transfers from the server to your device — critical for streaming and browsing.
-            Upload speed shows how fast data transfers from your device to the server —
-            important for video calls and file sharing. Ping (latency) measures the round-trip
-            time for a signal to reach the server and return, which directly affects gaming and
-            real-time communication performance.
-          </p>
-
-          <h2 className="text-lg sm:text-xl font-bold text-white mb-2">
-            What Is a Good Internet Speed?
-          </h2>
-          <div className="overflow-x-auto mb-6">
-            <table className="w-full text-sm text-slate-400 border-collapse">
-              <thead>
-                <tr className="border-b border-slate-700 text-left">
-                  <th className="py-2 pr-4 text-slate-300">Use Case</th>
-                  <th className="py-2 pr-4 text-slate-300">Recommended Speed</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr className="border-b border-slate-800">
-                  <td className="py-2 pr-4">Browsing & Social Media</td>
-                  <td className="py-2 pr-4">5–10 Mbps</td>
-                </tr>
-                <tr className="border-b border-slate-800">
-                  <td className="py-2 pr-4">HD Video Streaming</td>
-                  <td className="py-2 pr-4">15–25 Mbps</td>
-                </tr>
-                <tr className="border-b border-slate-800">
-                  <td className="py-2 pr-4">Online Gaming</td>
-                  <td className="py-2 pr-4">25+ Mbps, ping under 50ms</td>
-                </tr>
-                <tr>
-                  <td className="py-2 pr-4">Video Calls / Remote Work</td>
-                  <td className="py-2 pr-4">10–30 Mbps</td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-
-          <h2 className="text-lg sm:text-xl font-bold text-white mb-4">
-            Frequently Asked Questions
-          </h2>
-          <div className="space-y-4">
-            <div>
-              <h3 className="text-sm font-semibold text-white mb-1">
-                Is the NetPulse speed test result accurate?
-              </h3>
-              <p className="text-sm text-slate-400 leading-relaxed">
-                Yes. NetPulse uses real-time, server-based measurement, though results may vary
-                slightly depending on network congestion, device, and time of day.
-              </p>
-            </div>
-            <div>
-              <h3 className="text-sm font-semibold text-white mb-1">
-                Does NetPulse work on mobile data (4G/5G)?
-              </h3>
-              <p className="text-sm text-slate-400 leading-relaxed">
-                Yes, NetPulse works seamlessly on both WiFi and mobile data connections,
-                including 4G and 5G networks.
-              </p>
-            </div>
-            <div>
-              <h3 className="text-sm font-semibold text-white mb-1">
-                Is NetPulse completely free to use?
-              </h3>
-              <p className="text-sm text-slate-400 leading-relaxed">
-                Yes, NetPulse is 100% free with no sign-up, subscription, or app download
-                required.
-              </p>
-            </div>
-            <div>
-              <h3 className="text-sm font-semibold text-white mb-1">
-                How often should I run a speed test?
-              </h3>
-              <p className="text-sm text-slate-400 leading-relaxed">
-                You can test as often as you like — there's no limit. Many users test before
-                and after troubleshooting their router or contacting their ISP.
-              </p>
-            </div>
-            <div>
-              <h3 className="text-sm font-semibold text-white mb-1">
-                Why is my ping high even with fast download speed?
-              </h3>
-              <p className="text-sm text-slate-400 leading-relaxed">
-                High ping usually comes from network congestion, distance to the server, or
-                WiFi interference — even if your download speed looks good, high ping can still
-                affect gaming and video calls.
-              </p>
-            </div>
-          </div>
-        </section>
-      </article>
-  </div>
+      {/* Comprehensive Guides, Metrics Explanation, Tips & FAQ Section */}
+      <SpeedTestGuidesSection onNavigate={onNavigate} />
+    </div>
   );
 };

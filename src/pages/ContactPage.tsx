@@ -140,6 +140,26 @@ export const ContactPage: React.FC<ContactPageProps> = () => {
           </form>
         )}
       </div>
+
+      {/* Direct Contact & Support Details for AdSense Transparency */}
+      <div className="mt-8 grid grid-cols-1 sm:grid-cols-3 gap-4 text-center">
+        <div className="p-4 rounded-2xl bg-slate-900/40 border border-slate-800">
+          <div className="text-xs font-semibold text-slate-400">Direct Email</div>
+          <a href="mailto:contact@netpulse.2bd.net" className="text-xs font-mono text-cyan-400 hover:underline mt-1 block">
+            contact@netpulse.2bd.net
+          </a>
+        </div>
+        <div className="p-4 rounded-2xl bg-slate-900/40 border border-slate-800">
+          <div className="text-xs font-semibold text-slate-400">Response Window</div>
+          <div className="text-xs text-slate-300 font-medium mt-1">Within 24–48 hours</div>
+        </div>
+        <div className="p-4 rounded-2xl bg-slate-900/40 border border-slate-800">
+          <div className="text-xs font-semibold text-slate-400">Website URL</div>
+          <a href="https://netpulse.2bd.net" target="_blank" rel="noreferrer" className="text-xs font-mono text-cyan-400 hover:underline mt-1 block">
+            netpulse.2bd.net
+          </a>
+        </div>
+      </div>
     </div>
   );
 };

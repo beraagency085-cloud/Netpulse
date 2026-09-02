@@ -16,8 +16,7 @@ import {
   Video, 
   CloudUpload,
   Info,
-  Globe,
-  Sparkles
+  Globe
 } from 'lucide-react';
 import { SpeedMetrics, QualityAssessment, ServerNode, ClientInfo } from '../types';
 import { BandwidthCapabilitiesPanel } from './BandwidthCapabilitiesPanel';
@@ -31,7 +30,6 @@ interface ResultCardProps {
   unit: string;
   onTestAgain: () => void;
   onOpenShareModal: () => void;
-  onAskAI?: (prompt?: string) => void;
 }
 
 export const ResultCard: React.FC<ResultCardProps> = ({
@@ -42,7 +40,6 @@ export const ResultCard: React.FC<ResultCardProps> = ({
   unit,
   onTestAgain,
   onOpenShareModal,
-  onAskAI,
 }) => {
   const [copied, setCopied] = useState(false);
   const [showTechnicalDetails, setShowTechnicalDetails] = useState(false);
@@ -103,18 +100,6 @@ Test your internet speed at NetPulse Test`;
           </div>
 
           <div className="flex items-center gap-2 w-full sm:w-auto flex-wrap">
-            {onAskAI && (
-              <button
-                id="ask-ai-diagnose-results-btn"
-                onClick={() => onAskAI(`Please analyze my speed test results: Download ${metrics.download.avg} ${unit}, Upload ${metrics.upload.avg} ${unit}, Ping ${metrics.ping.avg}ms, Jitter ${metrics.ping.jitter}ms, Overall Grade ${assessment.grade}. What does this mean and how can I optimize it?`)}
-                className="flex-1 sm:flex-none inline-flex items-center justify-center gap-1.5 px-3.5 py-2.5 rounded-xl text-xs font-bold bg-gradient-to-r from-cyan-950 to-blue-950 hover:from-cyan-900 hover:to-blue-900 text-cyan-300 border border-cyan-500/40 hover:border-cyan-400 transition-all cursor-pointer shadow-sm group"
-                title="Ask AI Specialist to analyze these results"
-              >
-                <Sparkles className="w-3.5 h-3.5 text-cyan-400 group-hover:scale-110 transition-transform animate-pulse" />
-                <span>Ask AI to Diagnose</span>
-              </button>
-            )}
-
             <button
               id="copy-results-quick-button"
               onClick={copySummaryText}

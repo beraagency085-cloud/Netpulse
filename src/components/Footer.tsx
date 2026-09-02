@@ -60,6 +60,22 @@ export const Footer: React.FC<FooterProps> = ({ onNavigate }) => {
               </li>
               <li>
                 <button
+                  onClick={() => onNavigate('blog')}
+                  className="hover:text-cyan-400 transition-colors cursor-pointer"
+                >
+                  Guides & Articles
+                </button>
+              </li>
+              <li>
+                <button
+                  onClick={() => onNavigate('faq')}
+                  className="hover:text-cyan-400 transition-colors cursor-pointer"
+                >
+                  Frequently Asked Questions
+                </button>
+              </li>
+              <li>
+                <button
                   onClick={() => onNavigate('about')}
                   className="hover:text-cyan-400 transition-colors cursor-pointer"
                 >
