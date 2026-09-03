@@ -4,9 +4,10 @@ import crypto from 'crypto';
 import { createServer as createViteServer } from 'vite';
 import { GoogleGenAI } from '@google/genai';
 
-// Pre-allocate 8MB of pseudo-random buffer to prevent CPU overhead/compression during high-speed download testing
-const CHUNK_SIZE = 8 * 1024 * 1024; // 8 MB
-const RANDOM_BUFFER = crypto.randomBytes(CHUNK_SIZE);
+// Pre-allocate 16MB of pseudo-random buffer pool to prevent CPU overhead/compression during high-speed download testing
+const BUFFER_POOL_SIZE = 16 * 1024 * 1024; // 16 MB pool
+const RANDOM_BUFFER = crypto.randomBytes(BUFFER_POOL_SIZE);
+const SOCKET_CHUNK_SIZE = 64 * 1024; // 64 KB per socket write for optimal TCP flow control and zero jitter
 
 // Lazy-initialized Gemini AI client
 let geminiClient: GoogleGenAI | null = null;
@@ -83,9 +84,10 @@ async function startServer() {
 
   // 2. High Throughput Download Stream Endpoint (Multi-Threaded Saturator)
   app.get('/api/speedtest/download', (req: Request, res: Response) => {
-    // Disable socket delay
+    // Disable socket delay & enable keep-alive
     if (req.socket) {
       req.socket.setNoDelay(true);
+      req.socket.setKeepAlive(true);
     }
 
     // Prevent any browser or intermediary proxy caching & compression
@@ -94,32 +96,46 @@ async function startServer() {
     res.setHeader('Expires', '0');
     res.setHeader('Content-Type', 'application/octet-stream');
     res.setHeader('Content-Encoding', 'identity');
-    res.setHeader('Content-Disposition', 'attachment; filename="speedtest.bin"');
+    // Tell Nginx and Cloud Run reverse proxy to NEVER buffer this stream
+    res.setHeader('X-Accel-Buffering', 'no');
 
-    // Desired byte size (default 25MB, cap at 150MB per single request)
-    const requestedBytes = parseInt(req.query.bytes as string, 10) || 25 * 1024 * 1024;
-    const totalBytes = Math.min(Math.max(requestedBytes, 64 * 1024), 150 * 1024 * 1024);
+    // Desired byte size (default 16MB, max 60MB per chunk request)
+    const requestedBytes = parseInt(req.query.bytes as string, 10) || 16 * 1024 * 1024;
+    const totalBytes = Math.min(Math.max(requestedBytes, 128 * 1024), 60 * 1024 * 1024);
     
     res.setHeader('Content-Length', totalBytes.toString());
+    res.flushHeaders();
 
+    const CHUNK_SIZE = 256 * 1024; // 256 KB per chunk for high throughput
     let bytesSent = 0;
-    
+    let isClosed = false;
+
+    const cleanup = () => {
+      isClosed = true;
+    };
+    req.on('close', cleanup);
+    res.on('close', cleanup);
+
     function sendChunks() {
+      if (isClosed || res.writableEnded) return;
+
       while (bytesSent < totalBytes) {
         const remaining = totalBytes - bytesSent;
         const currentChunkSize = Math.min(remaining, CHUNK_SIZE);
+        const bufferOffset = bytesSent % (BUFFER_POOL_SIZE - currentChunkSize);
         
-        // Write slice of pre-generated uncompressible random buffer directly
-        const canContinue = res.write(RANDOM_BUFFER.subarray(0, currentChunkSize));
         bytesSent += currentChunkSize;
+        const canContinue = res.write(RANDOM_BUFFER.subarray(bufferOffset, bufferOffset + currentChunkSize));
 
         if (!canContinue) {
-          // Pause if buffer is full, resume when socket is drained
           res.once('drain', sendChunks);
           return;
         }
       }
-      res.end();
+
+      if (!res.writableEnded) {
+        res.end();
+      }
     }
 
     sendChunks();

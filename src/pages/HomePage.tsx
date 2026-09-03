@@ -30,7 +30,7 @@ interface HomePageProps {
   server: ServerNode | null;
   client: ClientInfo | null;
   settings: TestSettings;
-  onStartTest: () => void;
+  onStartTest: (mode?: 'full' | 'download_only') => void;
   onStopTest: () => void;
   onOpenShareModal: () => void;
   onOpenSettings: () => void;
@@ -136,13 +136,29 @@ export const HomePage: React.FC<HomePageProps> = ({
 
             {/* 4 Core Metrics Row in Bottom of Card */}
             <div className="w-full grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4 mt-6">
-              <div className={`bg-slate-800/40 p-3 sm:p-4 rounded-2xl border border-slate-700/50 flex flex-col justify-between text-center transition-all ${metrics.phase === 'download' ? 'border-cyan-500/60 ring-1 ring-cyan-500/30' : ''}`}>
+              <div className={`bg-slate-800/40 p-3 sm:p-4 rounded-2xl border border-slate-700/50 flex flex-col justify-between text-center transition-all ${metrics.phase === 'download' ? 'border-cyan-500/80 ring-2 ring-cyan-500/30 bg-cyan-950/20' : ''}`}>
                 <div>
-                  <span className="text-[10px] text-slate-400 uppercase font-bold block mb-1">Download</span>
-                  <span className="text-xl sm:text-2xl font-bold text-white font-mono-num">
-                    {metrics.download.avg > 0 ? metrics.download.avg.toFixed(1) : metrics.download.current > 0 ? metrics.download.current.toFixed(1) : '0.0'}
-                  </span>
-                  <span className="text-xs text-slate-500 ml-1">{settings.unit}</span>
+                  <div className="flex items-center justify-center gap-1.5 mb-1">
+                    {metrics.phase === 'download' && (
+                      <span className="relative flex h-2 w-2">
+                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-cyan-400 opacity-75"></span>
+                        <span className="relative inline-flex rounded-full h-2 w-2 bg-cyan-400"></span>
+                      </span>
+                    )}
+                    <span className={`text-[10px] uppercase font-bold block ${metrics.phase === 'download' ? 'text-cyan-300' : 'text-slate-400'}`}>
+                      Download
+                    </span>
+                  </div>
+                  <div className="flex items-baseline justify-center">
+                    <span className="text-xl sm:text-2xl font-bold text-white font-mono-num">
+                      {metrics.download.avg > 0 ? metrics.download.avg.toFixed(1) : metrics.download.current > 0 ? metrics.download.current.toFixed(1) : '0.0'}
+                    </span>
+                    <span className="text-xs text-slate-400 ml-1">{settings.unit}</span>
+                  </div>
+                  {/* Secondary /s (MB/s) Display */}
+                  <div className="mt-1 text-[11px] font-mono font-bold text-cyan-300">
+                    {((metrics.download.avg > 0 ? metrics.download.avg : metrics.download.current) / 8).toFixed(2)} MB/s
+                  </div>
                 </div>
                 <div className="mt-2 pt-1 border-t border-slate-700/30">
                   <MiniSparkline

@@ -144,11 +144,11 @@ Test your internet speed at NetPulse Test`;
                 </span>
               </div>
               {/* Dual Unit Secondary Readout */}
-              <div className="mt-1 flex items-center gap-1.5">
-                <span className="px-2 py-0.5 rounded text-[11px] font-mono font-medium bg-slate-800/80 border border-slate-700/60 text-slate-300">
+              <div className="mt-1.5 flex items-center gap-1.5">
+                <span className="px-2.5 py-0.5 rounded-lg text-xs font-mono font-bold bg-cyan-950/80 border border-cyan-500/40 text-cyan-200 shadow-sm shadow-cyan-500/20">
                   {unit === 'Mbps' 
-                    ? `≈ ${(metrics.download.avg / 8).toFixed(2)} MB/s` 
-                    : `≈ ${(metrics.download.avg * 8).toFixed(2)} Mbps`}
+                    ? `${(metrics.download.avg / 8).toFixed(2)} MB/s (/s)` 
+                    : `${(metrics.download.avg * 8).toFixed(2)} Mbps`}
                 </span>
               </div>
             </div>

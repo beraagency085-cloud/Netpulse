@@ -189,11 +189,11 @@ export default function App() {
     } catch {}
   };
 
-  const handleStartTest = () => {
+  const handleStartTest = (mode: 'full' | 'download_only' = 'full') => {
     if (currentRoute !== 'home') {
       setCurrentRoute('home');
     }
-    engineRef.current?.start().catch((err) => {
+    engineRef.current?.start(mode).catch((err) => {
       console.log('Test start result:', err.message);
     });
   };

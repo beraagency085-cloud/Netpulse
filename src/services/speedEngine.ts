@@ -42,7 +42,7 @@ export class SpeedTestEngine {
     this.settings = settings;
   }
 
-  public async start(): Promise<SpeedMetrics> {
+  public async start(mode: 'full' | 'download_only' = 'full'): Promise<SpeedMetrics> {
     if (this.isRunning) {
       this.abort();
     }
@@ -62,6 +62,33 @@ export class SpeedTestEngine {
     this.notify();
 
     try {
+      if (mode === 'download_only') {
+        // Quick baseline latency check (3 iterations, 0-15%)
+        await this.runPingTest(4);
+        if (this.abortController.signal.aborted) throw new Error('Test cancelled');
+
+        // Dedicated High-Precision Download Test (15-95%)
+        this.metrics.phase = 'download';
+        this.notify();
+        const downloadStreams = Math.max(this.settings.parallelStreams || 6, 4);
+        const downloadDuration = Math.max(this.settings.testDurationSeconds || 9, 7);
+        await this.runDownloadTest(downloadDuration, downloadStreams, true);
+        if (this.abortController.signal.aborted) throw new Error('Test cancelled');
+
+        // Finishing Phase
+        this.metrics.phase = 'finishing';
+        this.metrics.progress = 98;
+        this.notify();
+        await new Promise((r) => setTimeout(r, 300));
+
+        this.metrics.phase = 'completed';
+        this.metrics.progress = 100;
+        this.notify();
+        this.isRunning = false;
+        return this.metrics;
+      }
+
+      // Standard Full Diagnostic Flow:
       // 1. Latency & Ping Phase (Progress 0% - 20%)
       await this.runPingTest(14);
       if (this.abortController.signal.aborted) throw new Error('Test cancelled');
@@ -71,7 +98,7 @@ export class SpeedTestEngine {
       this.notify();
       const downloadStreams = Math.max(this.settings.parallelStreams || 6, 4);
       const downloadDuration = Math.max(this.settings.testDurationSeconds || 9, 6);
-      await this.runDownloadTest(downloadDuration, downloadStreams);
+      await this.runDownloadTest(downloadDuration, downloadStreams, false);
       if (this.abortController.signal.aborted) throw new Error('Test cancelled');
 
       // 3. Upload Phase (Progress 60% - 95%)
@@ -217,16 +244,25 @@ export class SpeedTestEngine {
   }
 
   // --- 2. Real Multi-Stream Download Throughput Engine ---
-  private async runDownloadTest(durationSec: number = 9, streams: number = 6): Promise<void> {
+  private async runDownloadTest(durationSec: number = 9, streams: number = 6, isDedicatedDownload: boolean = false): Promise<void> {
     const signal = this.abortController?.signal;
 
-    // A. Explicit Download Warm-Up Probe (Allows TCP Slow-Start, TLS buffers, and 4G/5G carrier radio to awaken)
+    // A. Explicit Warm-Up Probe to trigger DNS, TLS handshake and proxy wake-up
     try {
-      await fetch(`/api/speedtest/download?bytes=1048576&warmup=1&t=${Date.now()}`, {
-        cache: 'no-store',
-        signal,
-        headers: { 'Cache-Control': 'no-cache', Pragma: 'no-cache' },
-      }).then(r => r.body?.getReader().read()).catch(() => {});
+      await new Promise<void>((resolve) => {
+        const warmupXhr = new XMLHttpRequest();
+        warmupXhr.open('GET', `/api/speedtest/download?bytes=524288&warmup=1&t=${Date.now()}`, true);
+        warmupXhr.setRequestHeader('Cache-Control', 'no-cache, no-store');
+        warmupXhr.setRequestHeader('Pragma', 'no-cache');
+        warmupXhr.timeout = 2000;
+        warmupXhr.onload = () => resolve();
+        warmupXhr.onerror = () => resolve();
+        warmupXhr.ontimeout = () => resolve();
+        if (signal) {
+          signal.addEventListener('abort', () => warmupXhr.abort());
+        }
+        warmupXhr.send();
+      });
     } catch {
       // Warmup fail-safe
     }
@@ -235,90 +271,129 @@ export class SpeedTestEngine {
 
     const testStartTime = performance.now();
     const testEndTime = testStartTime + durationSec * 1000;
-    const warmUpGracePeriodMs = 1000; // Discard initial 1.0s ramp-up from final average
+    const warmUpGracePeriodMs = 800; // 0.8s warm-up window
 
     let totalBytesLoaded = 0;
+    let bytesAtWarmupEnd = 0;
+    let warmupCompleted = false;
+
     const rateSamples: number[] = [];
     const telemetry: number[] = [];
 
-    // High-resolution sliding window for instantaneous throughput
-    let lastWindowBytes = 0;
-    let lastWindowTime = testStartTime;
+    // Rolling high-resolution history queue for 900ms sliding window calculation
+    const windowHistory: { time: number; bytes: number }[] = [];
     let smoothedSpeedMbps = 0;
 
-    // High capacity chunk per stream (15MB - 35MB) to keep TCP pipes continuously full
-    const streamChunkBytes = this.settings.dataSaverMode ? 6 * 1024 * 1024 : 35 * 1024 * 1024;
+    // Optimal chunk size per stream request (6MB - 12MB) to keep TCP socket continuously saturated
+    const chunkBytes = this.settings.dataSaverMode ? 4 * 1024 * 1024 : 12 * 1024 * 1024;
+    const activeXhrs: XMLHttpRequest[] = [];
 
     const downloadWorker = async (streamId: number) => {
-      // Stagger stream starts slightly (25ms) to prevent single-packet TCP synchronization drops
+      // Stagger stream starts slightly (15ms) to prevent initial socket contention
       if (streamId > 0) {
-        await new Promise((r) => setTimeout(r, streamId * 25));
+        await new Promise((r) => setTimeout(r, streamId * 15));
       }
 
       while (performance.now() < testEndTime && !signal?.aborted) {
-        try {
-          const res = await fetch(`/api/speedtest/download?bytes=${streamChunkBytes}&s=${streamId}&t=${Date.now()}`, {
-            cache: 'no-store',
-            signal,
-            headers: {
-              'Cache-Control': 'no-cache',
-              Pragma: 'no-cache',
-            },
-          });
-
-          if (!res.ok || !res.body) {
-            throw new Error(`Download stream failed: ${res.statusText}`);
+        await new Promise<void>((resolve) => {
+          if (signal?.aborted || performance.now() >= testEndTime) {
+            resolve();
+            return;
           }
 
-          const reader = res.body.getReader();
-          while (true) {
-            if (signal?.aborted) {
-              await reader.cancel();
+          const xhr = new XMLHttpRequest();
+          activeXhrs.push(xhr);
+
+          const cacheBuster = `${Date.now()}_${streamId}_${Math.random().toString(36).substring(2, 6)}`;
+          xhr.open('GET', `/api/speedtest/download?bytes=${chunkBytes}&s=${streamId}&t=${cacheBuster}`, true);
+          xhr.setRequestHeader('Cache-Control', 'no-cache, no-store');
+          xhr.setRequestHeader('Pragma', 'no-cache');
+          xhr.responseType = 'arraybuffer';
+
+          let lastLoaded = 0;
+          xhr.onprogress = (event) => {
+            if (signal?.aborted || performance.now() >= testEndTime) {
+              xhr.abort();
+              resolve();
               return;
             }
-
-            const { done, value } = await reader.read();
-            if (done) break;
-
-            if (value) {
-              totalBytesLoaded += value.length;
+            const delta = event.loaded - lastLoaded;
+            if (delta > 0) {
+              totalBytesLoaded += delta;
+              lastLoaded = event.loaded;
             }
+          };
 
-            if (performance.now() >= testEndTime) {
-              await reader.cancel();
-              return;
-            }
+          const onFinish = () => {
+            const idx = activeXhrs.indexOf(xhr);
+            if (idx !== -1) activeXhrs.splice(idx, 1);
+            resolve();
+          };
+
+          xhr.onload = onFinish;
+          xhr.onerror = onFinish;
+          xhr.onabort = onFinish;
+
+          if (signal) {
+            signal.addEventListener('abort', () => xhr.abort());
           }
-        } catch (e: any) {
-          if (signal?.aborted) return;
-          // Graceful retry backoff
-          await new Promise((r) => setTimeout(r, 50));
-        }
+
+          xhr.send();
+        });
       }
     };
 
-    // Real-time telemetry ticker (every 60ms for ultra-responsive live feedback)
+    // Real-time telemetry ticker (every 50ms for live, responsive feedback)
     const ticker = setInterval(() => {
       const now = performance.now();
       const elapsedTotalSec = (now - testStartTime) / 1000;
-      const windowDeltaSec = (now - lastWindowTime) / 1000;
 
-      if (windowDeltaSec >= 0.1) {
-        const deltaBytes = totalBytesLoaded - lastWindowBytes;
-        // Formula: Mbps = (Delta Bytes * 8) / (Delta Seconds * 1,000,000)
-        const rawInstantMbps = (deltaBytes * 8) / (windowDeltaSec * 1000000);
+      // Track bytes loaded when warmup window ends
+      if (!warmupCompleted && (now - testStartTime) >= warmUpGracePeriodMs) {
+        warmupCompleted = true;
+        bytesAtWarmupEnd = totalBytesLoaded;
+      }
+
+      // Record sliding window sample
+      windowHistory.push({ time: now, bytes: totalBytesLoaded });
+
+      // Keep sliding window of 900ms to eliminate false drops between packet arrivals
+      while (windowHistory.length > 2 && (now - windowHistory[0].time) > 900) {
+        windowHistory.shift();
+      }
+
+      const oldest = windowHistory[0];
+      const windowDeltaSec = (now - oldest.time) / 1000;
+      const deltaBytes = totalBytesLoaded - oldest.bytes;
+
+      if (windowDeltaSec >= 0.12) {
+        // Precise Window Speed: Mbps = (Delta Bytes * 8) / (Delta Seconds * 1,000,000)
+        const instantMbps = (deltaBytes * 8) / (windowDeltaSec * 1000000);
         
-        // Exponential Moving Average (EMA) filter for responsive yet non-jittery live UI rendering
-        if (smoothedSpeedMbps === 0) {
-          smoothedSpeedMbps = rawInstantMbps;
-        } else {
-          smoothedSpeedMbps = smoothedSpeedMbps * 0.4 + rawInstantMbps * 0.6;
+        // Cumulative sustained speed since warmup began
+        const sustainedElapsedSec = Math.max(0.1, (now - (testStartTime + warmUpGracePeriodMs)) / 1000);
+        const sustainedBytes = Math.max(0, totalBytesLoaded - bytesAtWarmupEnd);
+        const cumulativeSpeedMbps = warmupCompleted 
+          ? (sustainedBytes * 8) / (sustainedElapsedSec * 1000000)
+          : instantMbps;
+
+        // Smooth speed indicator without sudden zero-decay
+        if (instantMbps > 0.1) {
+          if (smoothedSpeedMbps === 0) {
+            smoothedSpeedMbps = instantMbps;
+          } else {
+            // Responsive EMA: rises rapidly, smoothly buffers dips
+            const weight = instantMbps > smoothedSpeedMbps ? 0.65 : 0.35;
+            smoothedSpeedMbps = smoothedSpeedMbps * (1 - weight) + instantMbps * weight;
+          }
+        } else if (cumulativeSpeedMbps > 0.1) {
+          smoothedSpeedMbps = smoothedSpeedMbps * 0.85 + cumulativeSpeedMbps * 0.15;
         }
 
-        const displaySpeed = Number(smoothedSpeedMbps.toFixed(2));
+        const displaySpeed = Number(Math.max(smoothedSpeedMbps, cumulativeSpeedMbps * 0.75, 0.1).toFixed(2));
 
         // Record post-warmup measurements for statistical plateau determination
-        if (now - testStartTime > warmUpGracePeriodMs && displaySpeed > 0.05) {
+        if (now - testStartTime > warmUpGracePeriodMs && displaySpeed > 0.1) {
           rateSamples.push(displaySpeed);
         }
 
@@ -331,39 +406,56 @@ export class SpeedTestEngine {
         this.metrics.download = {
           current: displaySpeed,
           peak,
-          avg: displaySpeed,
+          avg: cumulativeSpeedMbps > 0.1 ? Number(cumulativeSpeedMbps.toFixed(2)) : displaySpeed,
           bytesTransferred: totalBytesLoaded,
           telemetry: [...telemetry],
         };
-        this.metrics.progress = Math.round(20 + progressFraction * 40);
-        this.notify();
 
-        lastWindowBytes = totalBytesLoaded;
-        lastWindowTime = now;
+        // Progress mapping
+        if (isDedicatedDownload) {
+          this.metrics.progress = Math.round(15 + progressFraction * 80);
+        } else {
+          this.metrics.progress = Math.round(20 + progressFraction * 40);
+        }
+        this.notify();
       }
-    }, 60);
+    }, 50);
 
     // Launch concurrent parallel workers (4-6 streams)
     const activeWorkers = Array.from({ length: streams }, (_, i) => downloadWorker(i));
     await Promise.all(activeWorkers);
+    
+    // Cleanup active XHR requests & ticker
     clearInterval(ticker);
+    activeXhrs.forEach((x) => {
+      try { x.abort(); } catch {}
+    });
 
-    // Final Stable Score Calculation (Trimmed Mean / Plateau Median)
-    // Discards the bottom 15% (slow start/ramp) and top 5% (cache burst outliers)
+    // Final Stable Score Calculation (True Sustained Physical Throughput + Trimmed Median)
+    const sustainedDurationSec = Math.max((performance.now() - (testStartTime + warmUpGracePeriodMs)) / 1000, 0.5);
+    const sustainedBytesLoaded = Math.max(totalBytesLoaded - bytesAtWarmupEnd, 1);
+    
+    // True Physical Sustained Speed in Mbps
+    const physicalSustainedMbps = (sustainedBytesLoaded * 8) / (sustainedDurationSec * 1000000);
+
     let finalStableMbps = 0;
-    if (rateSamples.length > 0) {
+    if (rateSamples.length > 5) {
+      // Discard bottom 15% (ramp-up residuals) and top 5% (socket burst outliers)
       const sorted = [...rateSamples].sort((a, b) => a - b);
       const startIdx = Math.floor(sorted.length * 0.15);
       const endIdx = Math.max(startIdx + 1, Math.floor(sorted.length * 0.95));
       const plateau = sorted.slice(startIdx, endIdx);
-      finalStableMbps = Number((plateau.reduce((a, b) => a + b, 0) / plateau.length).toFixed(2));
+      const plateauAvg = plateau.reduce((a, b) => a + b, 0) / plateau.length;
+
+      // Blend physical bytes calculation (60%) with plateau sustained average (40%)
+      finalStableMbps = Number(((plateauAvg * 0.4) + (physicalSustainedMbps * 0.6)).toFixed(2));
     } else {
-      const totalElapsedSec = Math.max((performance.now() - testStartTime) / 1000, 0.5);
-      finalStableMbps = Number(((totalBytesLoaded * 8) / (totalElapsedSec * 1000000)).toFixed(2));
+      const testDurationActualSec = (performance.now() - testStartTime) / 1000;
+      finalStableMbps = Number(((totalBytesLoaded * 8) / (testDurationActualSec * 1000000)).toFixed(2));
     }
 
-    this.metrics.download.avg = finalStableMbps;
-    this.metrics.download.current = finalStableMbps;
+    this.metrics.download.avg = Math.max(finalStableMbps, 0.1);
+    this.metrics.download.current = Math.max(finalStableMbps, 0.1);
     this.metrics.download.peak = Math.max(this.metrics.download.peak, finalStableMbps);
     this.metrics.download.bytesTransferred = totalBytesLoaded;
     this.notify();
